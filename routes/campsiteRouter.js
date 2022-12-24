@@ -1,13 +1,84 @@
 const express = require("express");
-const Campsite = require("../models/campsite");
+const campsiteRouter = express.Router();
 const authenticate = require("../authenticate");
 
-const campsiteRouter = express.Router();
+const Campsite = require("../models/campsite");
+
+campsiteRouter
+  .route("/")
+  .get((req, res, next) => {
+    Campsite.find()
+      .populate("comments.author")
+      .then((campsites) => {
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.json(campsites);
+      })
+      .catch((err) => next(err));
+  })
+  .post(authenticate.verifyUser, (req, res, next) => {
+    Campsite.create(req.body)
+      .then((campsite) => {
+        res.statusCode = 201;
+        res.setHeader("Content-Type", "application/json");
+        res.json(campsite);
+      })
+      .catch((err) => next(err));
+  })
+  .put(authenticate.verifyUser, (req, res) => {
+    res.statusCode = 403;
+    res.end("PUT operation not supported on /campsites");
+  })
+  .delete(authenticate.verifyUser, (req, res, next) => {
+    Campsite.deleteMany()
+      .then((campsites) => {
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.json(campsites);
+      })
+      .catch((err) => next(err));
+  });
+
+campsiteRouter
+  .route("/:campsiteId")
+  .get((req, res, next) => {
+    Campsite.findById(req.params.campsiteId)
+      .populate("comments.author")
+      .then((campsite) => res.status(200).json(campsite))
+      .catch((err) => next(err));
+  })
+  .post(authenticate.verifyUser, (req, res) => {
+    res.statusCode = 403;
+    res.end(
+      `POST operation not supported on /campsites/${req.params.campsiteId}`
+    );
+  })
+  .put(authenticate.verifyUser, (req, res, next) => {
+    Campsite.findByIdAndUpdate(
+      req.params.campsiteId,
+      {
+        $set: req.body,
+      },
+      { new: true }
+    )
+      .then((campsite) => {
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.json(campsite);
+      })
+      .catch((err) => next(err));
+  })
+  .delete(authenticate.verifyUser, (req, res, next) => {
+    Campsite.findByIdAndDelete(req.params.campsiteId)
+      .then((campsite) => res.status(200).json(campsite))
+      .catch((err) => next(err));
+  });
 
 campsiteRouter
   .route("/:campsiteId/comments")
   .get((req, res, next) => {
     Campsite.findById(req.params.campsiteId)
+      .populate("comments.author")
       .then((campsite) => {
         if (campsite) {
           res.statusCode = 200;
@@ -25,6 +96,7 @@ campsiteRouter
     Campsite.findById(req.params.campsiteId)
       .then((campsite) => {
         if (campsite) {
+          req.body.author = req.user._id;
           campsite.comments.push(req.body);
           campsite
             .save()
@@ -76,6 +148,7 @@ campsiteRouter
   .route("/:campsiteId/comments/:commentId")
   .get((req, res, next) => {
     Campsite.findById(req.params.campsiteId)
+      .populate("comments.author")
       .then((campsite) => {
         if (campsite && campsite.comments.id(req.params.commentId)) {
           res.statusCode = 200;
